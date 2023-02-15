@@ -10,6 +10,7 @@ $$
 --   2022-12-30: Initial development
 --   2023-01-04: Added defaults and exception handling
 --   2023-01-05: Added suppport for datashares and models
+--   2023-02-15: Fixed defaults
 -- Actions:
 --   Create Roles
 --   Assign users to Roles
@@ -325,8 +326,9 @@ BEGIN
 	
 	--Defaults to Schemas
 	v_location := 10000;
-	<<defaults_schemas>>
-	FOR v_rec IN SELECT sub2.nspname, sub2.defaclobjtype, split_part(split_part(sub2.acl, '=', 1), ' ', 2) AS groname, split_part(split_part(sub2.acl, '=', 2), '/', 1) AS grogrant FROM (SELECT sub.nspname, sub.defaclobjtype, split_part(array_to_string(sub.defaclacl, ','), ',', i) AS acl FROM (SELECT n.nspname, d.defaclobjtype, generate_series(1, array_upper(d.defaclacl, 1)) AS i, d.defaclacl FROM pg_default_acl d JOIN pg_namespace n on d.defaclnamespace = n.oid) AS sub WHERE split_part(array_to_string(defaclacl, ','), ',', i) LIKE 'group %') AS sub2 ORDER BY 1, 2, 3 LOOP
+	<<defaults>>
+        FOR v_rec IN 
+	SELECT sub2.usename, sub2.nspname, sub2.defaclobjtype, split_part(split_part(sub2.acl, '=', 1), ' ', 2) AS groname, split_part(split_part(sub2.acl, '=', 2), '/', 1) AS grogrant FROM (SELECT sub.defaclobjtype, sub.usename, sub.nspname, split_part(array_to_string(sub.defaclacl, ','), ',', i) AS acl FROM (SELECT u.usename, n.nspname, d.defaclobjtype, generate_series(1, array_upper(d.defaclacl, 1)) AS i, d.defaclacl FROM pg_default_acl d JOIN pg_namespace n ON d.defaclnamespace = n.oid JOIN pg_user u ON u.usesysid = d.defacluser) AS sub WHERE split_part(array_to_string(sub.defaclacl, ','), ',', i) LIKE 'group %') AS sub2 ORDER BY 2, 3, 4 LOOP
 		v_grant_count := len(v_rec.grogrant);
 		v_counter := 0;
 		<<grants>>
@@ -366,7 +368,7 @@ BEGIN
 			END IF;
 			IF v_action <> 'NONE' THEN
 				IF v_counter = 1 THEN
-					v_sql := 'ALTER DEFAULT PRIVILEGES IN SCHEMA "' || v_rec.nspname || '" GRANT '|| v_action;
+					v_sql := 'ALTER DEFAULT PRIVILEGES FOR USER "' || v_rec.usename || '" IN SCHEMA "' || v_rec.nspname || '" GRANT '|| v_action;
 				ELSE
 					v_sql := v_sql || ', ' || v_action;
 				END IF;
@@ -387,73 +389,7 @@ BEGIN
 				EXECUTE v_sql;
 			END IF;
 		END IF;
-	END LOOP defaults_schemas;
-
-	--Defaults to Users
-	v_location := 11000;
-	<<defaults_users>>
-	FOR v_rec IN SELECT split_part(split_part(sub2.acl, '=', 1), ' ', 2) AS groname, sub2.defaclobjtype, split_part(split_part(sub2.acl, '=', 2), '/', 1) AS grogrant, split_part(split_part(sub2.acl, '=', 2), '/', 2) AS usename FROM (SELECT sub.defaclobjtype, split_part(array_to_string(sub.defaclacl, ','), ',', i) AS acl FROM (SELECT d.defaclobjtype, generate_series(1, array_upper(d.defaclacl, 1)) AS i, d.defaclacl FROM pg_default_acl d WHERE defaclnamespace = 0) AS sub WHERE split_part(array_to_string(defaclacl, ','), ',', i) LIKE 'group %') AS sub2 ORDER BY 1, 2 LOOP
-		v_grant_count := len(v_rec.grogrant);
-		v_counter := 0;
-		<<grants>>
-		FOR v_i IN 1..v_grant_count LOOP
-			v_grant := substring(v_rec.grogrant, v_i, 1);
-			--r=tables
-			IF v_rec.defaclobjtype = 'r' THEN
-				IF v_grant = 'a' THEN
-					v_action = 'INSERT';
-				ELSIF v_grant = 'w' THEN
-					v_action = 'UPDATE';
-				ELSIF v_grant = 'd' THEN
-					v_action = 'DELETE';
-				ELSIF v_grant = 'r' THEN
-					v_action = 'SELECT';
-				ELSIF v_grant = 'x' THEN
-					v_action = 'REFERENCES';
-				ELSIF v_grant = 'D' THEN
-					v_action = 'DROP';
-				ELSIF v_grant = 't' THEN
-					v_action = 'TRIGGER';
-				ELSIF v_grant = 'R' THEN
-					v_action = 'RULE';
-				ELSE
-					v_action = 'NONE';
-				END IF;
-			--f=functions; p=procedures
-			ELSIF v_rec.defaclobjtype = 'f' OR v_rec.defaclobjtype = 'p' THEN
-				IF v_grant = 'X' THEN
-					v_action = 'EXECUTE';
-				ELSE
-					v_action = 'NONE';
-				END IF;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'ALTER DEFAULT PRIVILEGES FOR USER "' || v_rec.usename || '" GRANT '|| v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
-			END IF;
-		END LOOP grants;
-		IF v_counter > 0 THEN
-			IF v_rec.defaclobjtype = 'r' THEN
-				v_sql := v_sql || ' ON TABLES TO ROLE "' || v_rec.groname || '";';
-			ELSIF v_rec.defaclobjtype = 'f' THEN
-				v_sql := v_sql || ' ON FUNCTIONS TO ROLE "' || v_rec.groname || '";';
-			ELSIF v_rec.defaclobjtype = 'p' THEN
-				v_sql := v_sql || ' ON PROCEDURES TO ROLE "' || v_rec.groname || '";';
-			ELSE
-				v_sql := 'UNKNOWN defaclobjtype';
-			END IF;
-			RAISE INFO '%', v_sql;
-			IF dryrun IS NOT TRUE THEN
-				EXECUTE v_sql;
-			END IF;
-		END IF;
-	END LOOP defaults_users;
+	END LOOP defaults;
 EXCEPTION
 	WHEN OTHERS THEN
 		v_now := timeofday();
