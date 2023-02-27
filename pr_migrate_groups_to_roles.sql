@@ -11,6 +11,7 @@ $$
 --   2023-01-04: Added defaults and exception handling
 --   2023-01-05: Added suppport for datashares and models
 --   2023-02-15: Fixed defaults
+--   2023-02-27: Fixed DROP default permission 
 -- Actions:
 --   Create Roles
 --   Assign users to Roles
@@ -73,18 +74,12 @@ BEGIN
 				v_action = 'CREATE';
 			ELSIF v_grant = 'T' THEN
 				v_action = 'TEMPORARY';
+			END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_sql := 'GRANT ' || v_action;
 			ELSE
-				v_action = 'NONE';
-			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'GRANT ' || v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
+				v_sql := v_sql || ', ' || v_action;
 			END IF;
 		END LOOP grants;
 		IF v_counter > 0 THEN
@@ -109,18 +104,12 @@ BEGIN
 				v_action = 'USAGE';
 			ELSIF v_grant = 'C' THEN
 				v_action = 'CREATE';
+			END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_sql := 'GRANT ' || v_action;
 			ELSE
-				v_action = 'NONE';
-			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'GRANT ' || v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
+				v_sql := v_sql || ', ' || v_action;
 			END IF;
 		END LOOP grants;
 		IF v_counter > 0 THEN
@@ -155,18 +144,12 @@ BEGIN
 				v_action = 'TRIGGER';
 			ELSIF v_grant = 'R' THEN
 				v_action = 'RULE';
+			END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_sql := 'GRANT ' || v_action;
 			ELSE
-				v_action = 'NONE';
-			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'GRANT ' || v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
+				v_sql := v_sql || ', ' || v_action;
 			END IF;
 		END LOOP grants;
 		IF v_counter > 0 THEN
@@ -194,18 +177,12 @@ BEGIN
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'X' THEN
 				v_action = 'EXECUTE';
+			END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_sql := 'GRANT ' || v_action;
 			ELSE
-				v_action := 'NONE';
-			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'GRANT ' || v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
+				v_sql := v_sql || ', ' || v_action;
 			END IF;
 		END LOOP grants;
 		IF v_counter > 0 THEN
@@ -228,18 +205,12 @@ BEGIN
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'U' THEN
 				v_action = 'USAGE';
+			END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_sql := 'GRANT ' || v_action;
 			ELSE
-				v_action := 'NONE';
-			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'GRANT ' || v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
+				v_sql := v_sql || ', ' || v_action;
 			END IF;
 		END LOOP grants;
 		IF v_counter > 0 THEN
@@ -301,18 +272,12 @@ BEGIN
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'U' THEN
 				v_action = 'CREATE MODEL';
+			END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_sql := 'GRANT ' || v_action;
 			ELSE
-				v_action := 'NONE';
-			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'GRANT ' || v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
+				v_sql := v_sql || ', ' || v_action;
 			END IF;
 		END LOOP grants;
 		IF v_counter > 0 THEN
@@ -352,26 +317,18 @@ BEGIN
 					v_action = 'TRIGGER';
 				ELSIF v_grant = 'R' THEN
 					v_action = 'RULE';
-				ELSE
-					v_action = 'NONE';
 				END IF;
 			--f=functions; p=procedures
 			ELSIF v_rec.defaclobjtype = 'f' OR v_rec.defaclobjtype = 'p' THEN
 				IF v_grant = 'X' THEN
 					v_action = 'EXECUTE';
-				ELSE
-					v_action = 'NONE';
 				END IF;
 			END IF;
-			IF v_action <> 'NONE' THEN
-				v_counter := v_counter + 1;
-			END IF;
-			IF v_action <> 'NONE' THEN
-				IF v_counter = 1 THEN
-					v_sql := 'ALTER DEFAULT PRIVILEGES FOR USER "' || v_rec.usename || '" IN SCHEMA "' || v_rec.nspname || '" GRANT '|| v_action;
-				ELSE
-					v_sql := v_sql || ', ' || v_action;
-				END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_sql := 'ALTER DEFAULT PRIVILEGES FOR USER "' || v_rec.usename || '" IN SCHEMA "' || v_rec.nspname || '" GRANT '|| v_action;
+			ELSE
+				v_sql := v_sql || ', ' || v_action;
 			END IF;
 		END LOOP grants;
 		IF v_counter > 0 THEN
@@ -381,8 +338,6 @@ BEGIN
 				v_sql := v_sql || ' ON FUNCTIONS TO ROLE "' || v_rec.groname || '";';
 			ELSIF v_rec.defaclobjtype = 'p' THEN
 				v_sql := v_sql || ' ON PROCEDURES TO ROLE "' || v_rec.groname || '";';
-			ELSE
-				v_sql := 'UNKNOWN defaclobjtype';
 			END IF;
 			RAISE INFO '%', v_sql;
 			IF dryrun IS NOT TRUE THEN
