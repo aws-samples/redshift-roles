@@ -12,6 +12,7 @@ $$
 --   2023-01-05: Added suppport for datashares and models
 --   2023-02-15: Fixed defaults
 --   2023-02-27: Fixed DROP default permission 
+--   2023-05-09: Added column level security grants
 -- Actions:
 --   Create Roles
 --   Assign users to Roles
@@ -23,6 +24,7 @@ $$
 --   Default privileges to schemas and users
 --   Models to Roles including CREATE
 --   Datashares to Roles
+--   Columns to Roles
 -- Important Notes:
 --   The procedure is intended to simplify the migration of Groups to Roles. It creates the Roles and executes the grants so that the new Roles match the existing grants to Groups. This procedure does NOT revoke permissions from Roles so if you call this procedure, then revoke permission to a Group, and then run this procedure again, the Role will NOT have the grant revoked.
 */
@@ -31,7 +33,7 @@ DECLARE
 	v_location int;
 	v_now timestamp;
 	v_rec record;
-	v_sql varchar(65535);
+	v_sql varchar(max);
 	v_i int;
 	v_counter int;
 	v_grant varchar(1);
@@ -40,6 +42,12 @@ DECLARE
 	v_routine_type varchar(10);
 	v_previous_datashare_name varchar(128) := '';
 	v_previous_identity_name varchar(128) := '';
+	v_previous_group_name varchar(128) := '';
+	v_previous_schema_name varchar(128) := '';
+	v_previous_table_name varchar(128) := '';
+	v_columns varchar(max) := '';
+	v_target varchar(max) := '';
+	v_grants varchar(max) := '';
 BEGIN
 	--Create Roles
 	v_location := 1000;
@@ -71,9 +79,9 @@ BEGIN
 		FOR v_i IN 1..v_grant_count LOOP
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'C' THEN
-				v_action = 'CREATE';
+				v_action := 'CREATE';
 			ELSIF v_grant = 'T' THEN
-				v_action = 'TEMPORARY';
+				v_action := 'TEMPORARY';
 			END IF;
 			v_counter := v_counter + 1;
 			IF v_counter = 1 THEN
@@ -101,9 +109,9 @@ BEGIN
 		FOR v_i IN 1..v_grant_count LOOP
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'U' THEN
-				v_action = 'USAGE';
+				v_action := 'USAGE';
 			ELSIF v_grant = 'C' THEN
-				v_action = 'CREATE';
+				v_action := 'CREATE';
 			END IF;
 			v_counter := v_counter + 1;
 			IF v_counter = 1 THEN
@@ -131,19 +139,19 @@ BEGIN
 		FOR v_i IN 1..v_grant_count LOOP
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'a' THEN
-				v_action = 'INSERT';
+				v_action := 'INSERT';
 			ELSIF v_grant = 'w' THEN
-				v_action = 'UPDATE';
+				v_action := 'UPDATE';
 			ELSIF v_grant = 'd' THEN
-				v_action = 'DELETE';
+				v_action := 'DELETE';
 			ELSIF v_grant = 'r' THEN
-				v_action = 'SELECT';
+				v_action := 'SELECT';
 			ELSIF v_grant = 'x' THEN
-				v_action = 'REFERENCES';
+				v_action := 'REFERENCES';
 			ELSIF v_grant = 't' THEN
-				v_action = 'TRIGGER';
+				v_action := 'TRIGGER';
 			ELSIF v_grant = 'R' THEN
-				v_action = 'RULE';
+				v_action := 'RULE';
 			END IF;
 			v_counter := v_counter + 1;
 			IF v_counter = 1 THEN
@@ -176,7 +184,7 @@ BEGIN
 		FOR v_i IN 1..v_grant_count LOOP
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'X' THEN
-				v_action = 'EXECUTE';
+				v_action := 'EXECUTE';
 			END IF;
 			v_counter := v_counter + 1;
 			IF v_counter = 1 THEN
@@ -204,7 +212,7 @@ BEGIN
 		FOR v_i IN 1..v_grant_count LOOP
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'U' THEN
-				v_action = 'USAGE';
+				v_action := 'USAGE';
 			END IF;
 			v_counter := v_counter + 1;
 			IF v_counter = 1 THEN
@@ -271,7 +279,7 @@ BEGIN
 		FOR v_i IN 1..v_grant_count LOOP
 			v_grant := substring(v_rec.grogrant, v_i, 1);
 			IF v_grant = 'U' THEN
-				v_action = 'CREATE MODEL';
+				v_action := 'CREATE MODEL';
 			END IF;
 			v_counter := v_counter + 1;
 			IF v_counter = 1 THEN
@@ -302,26 +310,26 @@ BEGIN
 			--r=tables
 			IF v_rec.defaclobjtype = 'r' THEN
 				IF v_grant = 'a' THEN
-					v_action = 'INSERT';
+					v_action := 'INSERT';
 				ELSIF v_grant = 'w' THEN
-					v_action = 'UPDATE';
+					v_action := 'UPDATE';
 				ELSIF v_grant = 'd' THEN
-					v_action = 'DELETE';
+					v_action := 'DELETE';
 				ELSIF v_grant = 'r' THEN
-					v_action = 'SELECT';
+					v_action := 'SELECT';
 				ELSIF v_grant = 'x' THEN
-					v_action = 'REFERENCES';
+					v_action := 'REFERENCES';
 				ELSIF v_grant = 'D' THEN
-					v_action = 'DROP';
+					v_action := 'DROP';
 				ELSIF v_grant = 't' THEN
-					v_action = 'TRIGGER';
+					v_action := 'TRIGGER';
 				ELSIF v_grant = 'R' THEN
-					v_action = 'RULE';
+					v_action := 'RULE';
 				END IF;
 			--f=functions; p=procedures
 			ELSIF v_rec.defaclobjtype = 'f' OR v_rec.defaclobjtype = 'p' THEN
 				IF v_grant = 'X' THEN
-					v_action = 'EXECUTE';
+					v_action := 'EXECUTE';
 				END IF;
 			END IF;
 			v_counter := v_counter + 1;
@@ -345,6 +353,97 @@ BEGIN
 			END IF;
 		END IF;
 	END LOOP defaults;
+
+	--Columns to Roles
+	v_location := 11000;
+	v_counter := 0;
+	<<columns>>
+	FOR v_rec IN
+	SELECT sub3.groname, sub3.nspname, sub3.relname, sub3.attname, sub3.grogrant
+	FROM	(
+		SELECT sub2.nspname, sub2.relname, sub2.attname, split_part(sub2.acl, '=', 1) AS groname, split_part(split_part(sub2.acl, '=', 2), '/', 1) AS grogrant
+		FROM	(
+			SELECT sub.nspname, sub.relname, sub.attname, split_part(split_part(array_to_string(sub.attacl, ','), ',', i), ' ', 2) AS acl
+			FROM	(
+				SELECT n.nspname, c.relname, a.attname, generate_series(1, array_upper(a.attacl, 1)) AS i, a.attacl
+				FROM pg_class c 
+				JOIN pg_namespace n ON c.relnamespace = n.oid
+				JOIN pg_attribute_info a ON c.oid = a.attrelid 
+				WHERE a.attacl IS NOT NULL
+				) AS sub
+			WHERE split_part(array_to_string(sub.attacl, ','), ',', i) LIKE 'group %'
+			) AS sub2
+		) AS sub3
+	ORDER BY 1, 2, 3 LOOP
+		IF v_previous_group_name = v_rec.groname AND v_previous_schema_name = v_rec.nspname AND v_previous_table_name = v_rec.relname THEN
+			v_sql := v_sql || ', ' || v_rec.attname;
+			v_columns := v_columns || ', ' || v_rec.attname;
+		ELSE
+			IF v_counter > 0 THEN
+				v_columns := v_columns || ')';
+				v_target := 'ON "' || v_rec.nspname || '"."' || v_rec.relname || '" TO ROLE "' || v_rec.groname || '";';
+				v_grant_count := len(v_rec.grogrant);
+				v_counter := 0;
+				<<grants>>
+				FOR v_i IN 1..v_grant_count LOOP
+					v_grant := substring(v_rec.grogrant, v_i, 1);
+					IF v_grant = 'w' THEN
+						v_action := 'UPDATE';
+					ELSIF v_grant = 'r' THEN
+						v_action := 'SELECT';
+					END IF;
+					v_counter := v_counter + 1;
+					IF v_counter = 1 THEN
+						v_grants := 'GRANT ' || v_action || ' ' || v_columns;
+					ELSE
+						v_grants := v_grants || ', ' || v_action || ' ' || v_columns;
+					END IF;
+				END LOOP grants;
+
+				v_sql := v_grants || ' ' || v_target;
+				RAISE INFO '%', v_sql;
+				IF dryrun IS NOT TRUE THEN
+					EXECUTE v_sql;
+				END IF;
+			END IF;
+			v_sql := '';
+			v_columns := '(' || v_rec.attname;
+			v_target := '';
+		END IF;
+
+		v_previous_group_name := v_rec.groname;
+		v_previous_schema_name := v_rec.nspname;
+		v_previous_table_name := v_rec.relname;
+		v_counter := v_counter + 1;
+	END LOOP columns;
+	IF v_counter > 0 THEN
+		v_target := 'ON "' || v_rec.nspname || '"."' || v_rec.relname || '" TO ROLE ' || v_rec.groname || '";';
+		v_columns := v_columns || ')';
+		v_grant_count := len(v_rec.grogrant);
+		v_counter := 0;
+		<<grants>>
+		FOR v_i IN 1..v_grant_count LOOP
+			v_grant := substring(v_rec.grogrant, v_i, 1);
+			IF v_grant = 'w' THEN
+				v_action := 'UPDATE';
+			ELSIF v_grant = 'r' THEN
+				v_action := 'SELECT';
+			END IF;
+			v_counter := v_counter + 1;
+			IF v_counter = 1 THEN
+				v_grants := 'GRANT ' || v_action || ' ' || v_columns;
+			ELSE
+				v_grants := v_grants || ', ' || v_action || ' ' || v_columns;
+			END IF;
+		END LOOP grants;
+
+		v_sql := v_grants || ' ' || v_target;
+		RAISE INFO '%', v_sql;
+		IF dryrun IS NOT TRUE THEN
+			EXECUTE v_sql;
+		END IF;
+	END IF;
+
 EXCEPTION
 	WHEN OTHERS THEN
 		v_now := timeofday();
