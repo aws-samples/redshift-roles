@@ -13,6 +13,7 @@ $$
 --   2023-02-15: Fixed defaults
 --   2023-02-27: Fixed DROP default permission 
 --   2023-05-09: Added column level security grants
+--   2023-11-13: Fix for column level security grants
 -- Actions:
 --   Create Roles
 --   Assign users to Roles
@@ -42,9 +43,6 @@ DECLARE
 	v_routine_type varchar(10);
 	v_previous_datashare_name varchar(128) := '';
 	v_previous_identity_name varchar(128) := '';
-	v_previous_group_name varchar(128) := '';
-	v_previous_schema_name varchar(128) := '';
-	v_previous_table_name varchar(128) := '';
 	v_columns varchar(max) := '';
 	v_target varchar(max) := '';
 	v_grants varchar(max) := '';
@@ -356,7 +354,6 @@ BEGIN
 
 	--Columns to Roles
 	v_location := 11000;
-	v_counter := 0;
 	<<columns>>
 	FOR v_rec IN
 	SELECT sub3.groname, sub3.nspname, sub3.relname, sub3.attname, sub3.grogrant
@@ -375,52 +372,7 @@ BEGIN
 			) AS sub2
 		) AS sub3
 	ORDER BY 1, 2, 3 LOOP
-		IF v_previous_group_name = v_rec.groname AND v_previous_schema_name = v_rec.nspname AND v_previous_table_name = v_rec.relname THEN
-			v_sql := v_sql || ', ' || v_rec.attname;
-			v_columns := v_columns || ', ' || v_rec.attname;
-		ELSE
-			IF v_counter > 0 THEN
-				v_columns := v_columns || ')';
-				v_target := 'ON "' || v_rec.nspname || '"."' || v_rec.relname || '" TO ROLE "' || v_rec.groname || '";';
-				v_grant_count := len(v_rec.grogrant);
-				v_counter := 0;
-				<<grants>>
-				FOR v_i IN 1..v_grant_count LOOP
-					v_grant := substring(v_rec.grogrant, v_i, 1);
-					IF v_grant = 'w' THEN
-						v_action := 'UPDATE';
-					ELSIF v_grant = 'r' THEN
-						v_action := 'SELECT';
-					END IF;
-					v_counter := v_counter + 1;
-					IF v_counter = 1 THEN
-						v_grants := 'GRANT ' || v_action || ' ' || v_columns;
-					ELSE
-						v_grants := v_grants || ', ' || v_action || ' ' || v_columns;
-					END IF;
-				END LOOP grants;
-
-				v_sql := v_grants || ' ' || v_target;
-				RAISE INFO '%', v_sql;
-				IF dryrun IS NOT TRUE THEN
-					EXECUTE v_sql;
-				END IF;
-			END IF;
-			v_sql := '';
-			v_columns := '(' || v_rec.attname;
-			v_target := '';
-		END IF;
-
-		v_previous_group_name := v_rec.groname;
-		v_previous_schema_name := v_rec.nspname;
-		v_previous_table_name := v_rec.relname;
-		v_counter := v_counter + 1;
-	END LOOP columns;
-	IF v_counter > 0 THEN
-		v_target := 'ON "' || v_rec.nspname || '"."' || v_rec.relname || '" TO ROLE ' || v_rec.groname || '";';
-		v_columns := v_columns || ')';
 		v_grant_count := len(v_rec.grogrant);
-		v_counter := 0;
 		<<grants>>
 		FOR v_i IN 1..v_grant_count LOOP
 			v_grant := substring(v_rec.grogrant, v_i, 1);
@@ -429,21 +381,14 @@ BEGIN
 			ELSIF v_grant = 'r' THEN
 				v_action := 'SELECT';
 			END IF;
-			v_counter := v_counter + 1;
-			IF v_counter = 1 THEN
-				v_grants := 'GRANT ' || v_action || ' ' || v_columns;
-			ELSE
-				v_grants := v_grants || ', ' || v_action || ' ' || v_columns;
+			v_sql := 'GRANT ' || v_action || ' ("' || v_rec.attname || '") ON "' || v_rec.nspname || '"."' || v_rec.relname || '" TO ROLE "' || v_rec.groname || '";';
+
+			RAISE INFO '%', v_sql;
+			IF dryrun IS NOT TRUE THEN
+				EXECUTE v_sql;
 			END IF;
 		END LOOP grants;
-
-		v_sql := v_grants || ' ' || v_target;
-		RAISE INFO '%', v_sql;
-		IF dryrun IS NOT TRUE THEN
-			EXECUTE v_sql;
-		END IF;
-	END IF;
-
+	END LOOP columns;
 EXCEPTION
 	WHEN OTHERS THEN
 		v_now := timeofday();
