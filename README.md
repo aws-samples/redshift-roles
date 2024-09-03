@@ -1,5 +1,5 @@
 # redshift-roles
-Scripts, SQL, and Stored Procedures that are useful in using and adopting the use of using ROLE for security access in Redshift.
+Scripts, SQL queries, and Stored Procedures that are useful in using and adopting the use of using ROLE for security access in Redshift.
 
 ## Contents
 - pr_migrate_groups_to_roles.sql - Stored procedure that creates roles based on the existing groups and performs the grants needed to replace groups in favor of roles.
